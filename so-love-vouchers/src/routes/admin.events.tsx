@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -21,10 +21,31 @@ import {
 } from "@/components/admin/form-kit";
 import { ImageUploader } from "@/components/image-uploader";
 import { useRealtimeInvalidate } from "@/hooks/use-realtime";
-import { Plus, Pencil, Trash2, Loader2, MapPin, CalendarDays, Bell } from "lucide-react";
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  Loader2,
+  MapPin,
+  CalendarDays,
+  Bell,
+  Ban,
+  Link2,
+  ClipboardList,
+  Users,
+  Download,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
 import { broadcastPush } from "@/lib/push.functions";
+import { cn } from "@/lib/utils";
+import {
+  type EventRegistration,
+  type RegistrationMode,
+  attendeesLabel,
+  registrationModeOf,
+  registrationsToCsv,
+} from "@/lib/event-registration";
 
 export const Route = createFileRoute("/admin/events")({
   component: AdminEventsPage,
@@ -40,6 +61,7 @@ type EventRow = {
   image_url: string | null;
   form_url: string | null;
   video_url: string | null;
+  registration_enabled: boolean;
   is_published: boolean;
 };
 
@@ -49,6 +71,7 @@ type EditState = Partial<EventRow> & {
   starts_time?: string;
   ends_date?: string;
   ends_time?: string;
+  reg_mode: RegistrationMode;
 };
 
 const empty: EditState = {
@@ -66,7 +89,19 @@ const empty: EditState = {
   starts_time: "",
   ends_date: "",
   ends_time: "",
+  reg_mode: "none",
 };
+
+const REG_MODES: {
+  value: RegistrationMode;
+  label: string;
+  hint: string;
+  icon: React.ComponentType<{ className?: string }>;
+}[] = [
+  { value: "none", label: "None", hint: "No sign-up needed", icon: Ban },
+  { value: "link", label: "Jotform / link", hint: "Open an external form", icon: Link2 },
+  { value: "form", label: "In-app form", hint: "Name, email & headcount", icon: ClipboardList },
+];
 
 function toLocalInput(iso: string | null | undefined) {
   if (!iso) return { date: "", time: "" };
@@ -98,8 +133,10 @@ function normaliseLink(raw: string | null | undefined, label: string): string | 
 function AdminEventsPage() {
   const qc = useQueryClient();
   useRealtimeInvalidate("events", [["admin-events"]]);
+  useRealtimeInvalidate("event_registrations", [["admin-event-reg-totals"]]);
   const [edit, setEdit] = useState<EditState | null>(null);
   const [deleting, setDeleting] = useState<EventRow | null>(null);
+  const [viewingRegs, setViewingRegs] = useState<EventRow | null>(null);
   const sendPush = useServerFn(broadcastPush);
 
   const { data, isLoading } = useQuery({
@@ -114,12 +151,38 @@ function AdminEventsPage() {
     },
   });
 
+  // Registration totals per event (people + headcount), for the list.
+  const { data: totals } = useQuery({
+    queryKey: ["admin-event-reg-totals"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("event_registrations")
+        .select("event_id, attendees");
+      if (error) throw error;
+      const byEvent: Record<string, { count: number; guests: number }> = {};
+      for (const r of data ?? []) {
+        const t = (byEvent[r.event_id] ??= { count: 0, guests: 0 });
+        t.count += 1;
+        t.guests += r.attendees;
+      }
+      return byEvent;
+    },
+  });
+
   const save = useMutation({
     mutationFn: async (e: EditState) => {
       if (!(e.title ?? "").trim()) throw new Error("Title is required");
       const startsAt = combineDatetime(e.starts_date ?? "", e.starts_time ?? "");
       if (!startsAt) throw new Error("Start date is required");
+      if (Number.isNaN(new Date(startsAt).getTime())) throw new Error("Enter a valid start date");
       const endsAt = combineDatetime(e.ends_date ?? "", e.ends_time ?? "");
+      if (endsAt && Number.isNaN(new Date(endsAt).getTime())) {
+        throw new Error("Enter a valid end date");
+      }
+      const formUrl = e.reg_mode === "link" ? normaliseLink(e.form_url, "form") : null;
+      if (e.reg_mode === "link" && !formUrl) {
+        throw new Error("Paste the form link, e.g. https://form.jotform.com/…");
+      }
       const payload = {
         title: (e.title ?? "").trim(),
         description: e.description || null,
@@ -127,7 +190,10 @@ function AdminEventsPage() {
         starts_at: new Date(startsAt).toISOString(),
         ends_at: endsAt ? new Date(endsAt).toISOString() : null,
         image_url: e.image_url ?? null,
-        form_url: normaliseLink(e.form_url, "form"),
+        // One registration method at a time: the link is cleared when the
+        // admin switches to the in-app form (or turns registration off).
+        form_url: formUrl,
+        registration_enabled: e.reg_mode === "form",
         video_url: normaliseLink(e.video_url, "video"),
         is_published: e.is_published ?? true,
       };
@@ -238,6 +304,16 @@ function AdminEventsPage() {
                         Hidden
                       </Badge>
                     )}
+                    {registrationModeOf(ev) === "link" && (
+                      <Badge variant="outline" className="text-[10px] rounded-full gap-1">
+                        <Link2 className="size-3" /> Form link
+                      </Badge>
+                    )}
+                    {registrationModeOf(ev) === "form" && (
+                      <Badge className="text-[10px] rounded-full gap-1 bg-primary/10 text-primary hover:bg-primary/15 border-0">
+                        <ClipboardList className="size-3" /> In-app form
+                      </Badge>
+                    )}
                   </div>
                   <p className="text-xs text-muted-foreground mt-1 flex items-center gap-3 flex-wrap">
                     <span className="inline-flex items-center gap-1.5">
@@ -251,6 +327,18 @@ function AdminEventsPage() {
                       </span>
                     )}
                   </p>
+                  {registrationModeOf(ev) === "form" && (
+                    <button
+                      type="button"
+                      onClick={() => setViewingRegs(ev)}
+                      className="mt-1.5 inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
+                    >
+                      <Users className="size-3.5" />
+                      {totals?.[ev.id]
+                        ? `${totals[ev.id].count} registered · ${attendeesLabel(totals[ev.id].guests)} attending`
+                        : "No registrations yet"}
+                    </button>
+                  )}
                 </div>
                 <div className="flex gap-1 shrink-0">
                   <Button
@@ -268,6 +356,7 @@ function AdminEventsPage() {
                         starts_time: s.time,
                         ends_date: en.date,
                         ends_time: en.time,
+                        reg_mode: registrationModeOf(ev),
                       });
                     }}
                   >
@@ -350,18 +439,6 @@ function AdminEventsPage() {
                 />
               </Field>
               <Field
-                label="Registration form link"
-                hint="Paste a Jotform (or any form) link. Members see a Register button on the event — leave it empty and no button shows."
-              >
-                <Input
-                  type="url"
-                  inputMode="url"
-                  placeholder="https://form.jotform.com/..."
-                  value={edit.form_url ?? ""}
-                  onChange={(e) => setEdit({ ...edit, form_url: e.target.value })}
-                />
-              </Field>
-              <Field
                 label="Video link"
                 hint="Paste a Google Drive, Facebook, YouTube or any other video link. Members see a Watch Video button on the event — leave it empty and no button shows."
               >
@@ -373,6 +450,68 @@ function AdminEventsPage() {
                   onChange={(e) => setEdit({ ...edit, video_url: e.target.value })}
                 />
               </Field>
+            </FormSection>
+
+            <FormSection
+              title="Registration"
+              description="How members sign up for this event. They see a Register button on the event."
+            >
+              <div
+                role="radiogroup"
+                aria-label="Registration type"
+                className="grid grid-cols-3 gap-2"
+              >
+                {REG_MODES.map((m) => {
+                  const active = edit.reg_mode === m.value;
+                  const Icon = m.icon;
+                  return (
+                    <button
+                      key={m.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      onClick={() => setEdit({ ...edit, reg_mode: m.value })}
+                      className={cn(
+                        "rounded-xl border p-3 text-left transition-all",
+                        active
+                          ? "border-primary bg-primary/[0.06] ring-1 ring-primary"
+                          : "border-border hover:border-foreground/30",
+                      )}
+                    >
+                      <Icon
+                        className={cn("size-4", active ? "text-primary" : "text-muted-foreground")}
+                      />
+                      <p className="text-[13px] font-semibold mt-2 leading-tight">{m.label}</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                        {m.hint}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+              {edit.reg_mode === "link" && (
+                <Field
+                  label="Form link"
+                  required
+                  hint="Paste your Jotform (or any form) link. Members tap Register to open it."
+                >
+                  <Input
+                    type="url"
+                    inputMode="url"
+                    placeholder="https://form.jotform.com/..."
+                    value={edit.form_url ?? ""}
+                    onChange={(e) => setEdit({ ...edit, form_url: e.target.value })}
+                  />
+                </Field>
+              )}
+              {edit.reg_mode === "form" && (
+                <InfoNote icon={ClipboardList}>
+                  Members fill in their <span className="font-medium text-foreground">name</span>,{" "}
+                  <span className="font-medium text-foreground">email</span> and{" "}
+                  <span className="font-medium text-foreground">how many will attend</span> (1–5 or
+                  a custom number). Registrations show on this event in the list, with a CSV export.
+                </InfoNote>
+              )}
             </FormSection>
 
             <FormSection title="Date &amp; time">
@@ -411,6 +550,8 @@ function AdminEventsPage() {
         )}
       </AdminModal>
 
+      <RegistrationsDialog event={viewingRegs} onClose={() => setViewingRegs(null)} />
+
       <ConfirmDialog
         open={!!deleting}
         onOpenChange={(o) => !o && setDeleting(null)}
@@ -419,7 +560,7 @@ function AdminEventsPage() {
         description={
           <>
             <span className="font-medium text-foreground">{deleting?.title}</span> will be removed
-            from every member's app immediately. This can't be undone.
+            from every member's app immediately, along with its registrations. This can't be undone.
           </>
         }
         onConfirm={() => deleting && del.mutate(deleting.id)}
@@ -427,5 +568,144 @@ function AdminEventsPage() {
         confirmLabel="Delete event"
       />
     </div>
+  );
+}
+
+/** Everyone registered for one event, with totals, CSV export and removal. */
+function RegistrationsDialog({ event, onClose }: { event: EventRow | null; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [removing, setRemoving] = useState<EventRegistration | null>(null);
+  useRealtimeInvalidate("event_registrations", [["admin-event-regs", event?.id]]);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["admin-event-regs", event?.id],
+    enabled: !!event,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("event_registrations")
+        .select("*")
+        .eq("event_id", event!.id)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return data as EventRegistration[];
+    },
+  });
+
+  const guests = useMemo(() => (data ?? []).reduce((sum, r) => sum + r.attendees, 0), [data]);
+
+  const remove = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("event_registrations").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Registration removed");
+      qc.invalidateQueries({ queryKey: ["admin-event-regs", event?.id] });
+      qc.invalidateQueries({ queryKey: ["admin-event-reg-totals"] });
+      setRemoving(null);
+    },
+    onError: (e) => toast.error(e.message || "Could not remove"),
+  });
+
+  function exportCsv() {
+    if (!event || !data?.length) return;
+    // BOM so Excel opens accented names correctly.
+    const blob = new Blob(["\uFEFF" + registrationsToCsv(data)], {
+      type: "text/csv;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${event.title.replace(/[^\w-]+/g, "-").toLowerCase()}-registrations.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <>
+      <AdminModal
+        open={!!event}
+        onOpenChange={(o) => !o && onClose()}
+        eyebrow="Registrations"
+        icon={Users}
+        title={event?.title ?? ""}
+        description={
+          data?.length
+            ? `${data.length} registered · ${attendeesLabel(guests)} attending in total`
+            : "Members who register in the app appear here live."
+        }
+        footer={
+          <div className="flex items-center justify-between gap-2 w-full">
+            <Button variant="ghost" size="sm" onClick={onClose}>
+              Close
+            </Button>
+            <Button size="sm" onClick={exportCsv} disabled={!data?.length}>
+              <Download className="size-3.5 mr-1.5" /> Export CSV
+            </Button>
+          </div>
+        }
+      >
+        <ModalBody>
+          {isLoading ? (
+            <div className="py-10 grid place-items-center">
+              <Loader2 className="size-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : !data?.length ? (
+            <div className="py-12 text-center">
+              <Users className="size-8 mx-auto text-muted-foreground/50" />
+              <p className="text-sm font-medium mt-3">No registrations yet</p>
+            </div>
+          ) : (
+            <ul className="divide-y divide-border rounded-2xl border border-border overflow-hidden">
+              {data.map((r) => (
+                <li key={r.id} className="flex items-center gap-3 px-4 py-3 bg-card">
+                  <span className="grid place-items-center size-9 rounded-full bg-primary/10 text-primary font-bold text-sm shrink-0">
+                    {r.name.trim().charAt(0).toUpperCase() || "?"}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold truncate">{r.name}</p>
+                    <a
+                      href={`mailto:${r.email}`}
+                      className="text-xs text-muted-foreground truncate block hover:text-primary"
+                    >
+                      {r.email}
+                    </a>
+                  </div>
+                  <span className="text-xs font-semibold bg-muted rounded-full px-2.5 py-1 shrink-0 tabular-nums">
+                    {attendeesLabel(r.attendees)}
+                  </span>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="size-8 rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
+                    onClick={() => setRemoving(r)}
+                    aria-label={`Remove ${r.name}`}
+                  >
+                    <Trash2 className="size-3.5" />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </ModalBody>
+      </AdminModal>
+
+      <ConfirmDialog
+        open={!!removing}
+        onOpenChange={(o) => !o && setRemoving(null)}
+        icon={Trash2}
+        title="Remove this registration?"
+        description={
+          <>
+            <span className="font-medium text-foreground">{removing?.name}</span> (
+            {removing ? attendeesLabel(removing.attendees) : ""}) will be taken off the list for{" "}
+            {event?.title}.
+          </>
+        }
+        onConfirm={() => removing && remove.mutate(removing.id)}
+        loading={remove.isPending}
+        confirmLabel="Remove"
+      />
+    </>
   );
 }

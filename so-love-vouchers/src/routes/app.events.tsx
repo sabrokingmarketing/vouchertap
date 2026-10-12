@@ -7,6 +7,9 @@ import { Badge } from "@/components/ui/badge";
 import { CalendarDays, MapPin, Loader2, Pin, Clock, ExternalLink, PlayCircle } from "lucide-react";
 import { useRealtimeInvalidate } from "@/hooks/use-realtime";
 import { SmartImage } from "@/components/smart-image";
+import { InAppRegistration } from "@/components/event-registration";
+import { useMyEventRegistrations } from "@/hooks/use-event-registrations";
+import { registrationModeOf } from "@/lib/event-registration";
 
 // Pinned SLK Breakfast card cover (public/breakfast-cover.jpg).
 const BREAKFAST_COVER = "/breakfast-cover.jpg";
@@ -87,6 +90,7 @@ function PinnedBreakfastCard() {
 
 function EventsPage() {
   useRealtimeInvalidate("events", [["events"]]);
+  const { data: myRegistrations } = useMyEventRegistrations();
 
   const { data, isLoading } = useQuery({
     queryKey: ["events"],
@@ -131,102 +135,111 @@ function EventsPage() {
           </li>
           {(data ?? [])
             .filter((e) => !isRsvpEvent(e.title))
-            .map((event, i) => (
-              <li
-                key={event.id}
-                className="animate-rise"
-                style={{ animationDelay: `${Math.min(i + 1, 8) * 60}ms` }}
-              >
-                <Card className="group overflow-hidden border-border/60 bg-card rounded-2xl shadow-lg shadow-black/[0.04] ring-1 ring-black/[0.02] hover:shadow-xl hover:shadow-black/[0.08] hover:-translate-y-1 hover:border-primary/40 transition-all duration-300 ease-out h-full flex flex-col">
-                  {event.image_url && (
-                    <SmartImage
-                      src={event.image_url}
-                      alt={event.title}
-                      wrapperClassName="aspect-[16/10]"
-                      className="transition-transform duration-500 group-hover:scale-[1.03]"
-                    />
-                  )}
-                  <div className="p-6 flex-1 flex flex-col gap-4">
-                    <div>
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-primary font-semibold">
-                        {new Date(event.starts_at).toLocaleDateString(undefined, {
-                          weekday: "long",
-                        })}
-                      </p>
-                      <h2 className="text-xl font-semibold leading-snug mt-2 tracking-tight">
-                        {event.title}
-                      </h2>
-                    </div>
-                    {event.description && (
-                      <p className="text-sm text-muted-foreground leading-relaxed line-clamp-2">
-                        {event.description}
-                      </p>
+            .map((event, i) => {
+              const mode = registrationModeOf(event);
+              return (
+                <li
+                  key={event.id}
+                  className="animate-rise"
+                  style={{ animationDelay: `${Math.min(i + 1, 8) * 60}ms` }}
+                >
+                  <Card className="group overflow-hidden border-border/60 bg-card rounded-2xl shadow-lg shadow-black/[0.04] ring-1 ring-black/[0.02] hover:shadow-xl hover:shadow-black/[0.08] hover:-translate-y-1 hover:border-primary/40 transition-all duration-300 ease-out h-full flex flex-col">
+                    {event.image_url && (
+                      <SmartImage
+                        src={event.image_url}
+                        alt={event.title}
+                        wrapperClassName="aspect-[16/10]"
+                        className="transition-transform duration-500 group-hover:scale-[1.03]"
+                      />
                     )}
-                    <div className="mt-1 space-y-2.5 text-sm">
-                      <div className="flex items-center gap-2.5">
-                        <span className="grid place-items-center size-7 rounded-lg bg-primary/10 text-primary shrink-0">
-                          <Clock className="size-3.5" />
-                        </span>
-                        <span className="font-medium text-foreground">
-                          {new Date(event.starts_at).toLocaleTimeString(undefined, {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2.5">
-                        <span className="grid place-items-center size-7 rounded-lg bg-primary/10 text-primary shrink-0">
-                          <CalendarDays className="size-3.5" />
-                        </span>
-                        <span className="font-medium text-foreground">
+                    <div className="p-6 flex-1 flex flex-col gap-4">
+                      <div>
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-primary font-semibold">
                           {new Date(event.starts_at).toLocaleDateString(undefined, {
                             weekday: "long",
-                            day: "numeric",
-                            month: "long",
                           })}
-                        </span>
+                        </p>
+                        <h2 className="text-xl font-semibold leading-snug mt-2 tracking-tight">
+                          {event.title}
+                        </h2>
                       </div>
-                      {event.location && (
+                      {event.description && (
+                        <p className="text-sm text-muted-foreground leading-relaxed line-clamp-2">
+                          {event.description}
+                        </p>
+                      )}
+                      <div className="mt-1 space-y-2.5 text-sm">
                         <div className="flex items-center gap-2.5">
                           <span className="grid place-items-center size-7 rounded-lg bg-primary/10 text-primary shrink-0">
-                            <MapPin className="size-3.5" />
+                            <Clock className="size-3.5" />
                           </span>
-                          <span className="font-medium text-foreground">{event.location}</span>
+                          <span className="font-medium text-foreground">
+                            {new Date(event.starts_at).toLocaleTimeString(undefined, {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2.5">
+                          <span className="grid place-items-center size-7 rounded-lg bg-primary/10 text-primary shrink-0">
+                            <CalendarDays className="size-3.5" />
+                          </span>
+                          <span className="font-medium text-foreground">
+                            {new Date(event.starts_at).toLocaleDateString(undefined, {
+                              weekday: "long",
+                              day: "numeric",
+                              month: "long",
+                            })}
+                          </span>
+                        </div>
+                        {event.location && (
+                          <div className="flex items-center gap-2.5">
+                            <span className="grid place-items-center size-7 rounded-lg bg-primary/10 text-primary shrink-0">
+                              <MapPin className="size-3.5" />
+                            </span>
+                            <span className="font-medium text-foreground">{event.location}</span>
+                          </div>
+                        )}
+                      </div>
+                      {(mode !== "none" || event.video_url) && (
+                        // Wrapper carries mt-auto so the group pins to the card
+                        // bottom and cards stay aligned however many links exist.
+                        <div className="mt-auto flex flex-col gap-2">
+                          {mode === "form" && (
+                            <InAppRegistration
+                              event={event}
+                              registration={myRegistrations?.[event.id]}
+                            />
+                          )}
+                          {mode === "link" && event.form_url && (
+                            <Button asChild className="w-full rounded-xl h-12 font-semibold">
+                              <a href={event.form_url} target="_blank" rel="noopener noreferrer">
+                                Register
+                                <ExternalLink className="size-4 ml-1.5" />
+                              </a>
+                            </Button>
+                          )}
+                          {event.video_url && (
+                            // Secondary only when Register is also present, so the
+                            // sign-up stays the clear primary action.
+                            <Button
+                              asChild
+                              variant={mode !== "none" ? "outline" : "default"}
+                              className="w-full rounded-xl h-12 font-semibold"
+                            >
+                              <a href={event.video_url} target="_blank" rel="noopener noreferrer">
+                                <PlayCircle className="size-4 mr-1.5" />
+                                Watch Video
+                              </a>
+                            </Button>
+                          )}
                         </div>
                       )}
                     </div>
-                    {(event.form_url || event.video_url) && (
-                      // Wrapper carries mt-auto so the group pins to the card
-                      // bottom and cards stay aligned however many links exist.
-                      <div className="mt-auto flex flex-col gap-2">
-                        {event.form_url && (
-                          <Button asChild className="w-full rounded-xl h-12 font-semibold">
-                            <a href={event.form_url} target="_blank" rel="noopener noreferrer">
-                              Register
-                              <ExternalLink className="size-4 ml-1.5" />
-                            </a>
-                          </Button>
-                        )}
-                        {event.video_url && (
-                          // Secondary only when Register is also present, so the
-                          // sign-up stays the clear primary action.
-                          <Button
-                            asChild
-                            variant={event.form_url ? "outline" : "default"}
-                            className="w-full rounded-xl h-12 font-semibold"
-                          >
-                            <a href={event.video_url} target="_blank" rel="noopener noreferrer">
-                              <PlayCircle className="size-4 mr-1.5" />
-                              Watch Video
-                            </a>
-                          </Button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </Card>
-              </li>
-            ))}
+                  </Card>
+                </li>
+              );
+            })}
         </ul>
       )}
     </div>

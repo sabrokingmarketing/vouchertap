@@ -68,6 +68,47 @@ export type Database = {
         };
         Relationships: [];
       };
+      event_registrations: {
+        Row: {
+          attendees: number;
+          created_at: string;
+          email: string;
+          event_id: string;
+          id: string;
+          name: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          attendees: number;
+          created_at?: string;
+          email: string;
+          event_id: string;
+          id?: string;
+          name: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Update: {
+          attendees?: number;
+          created_at?: string;
+          email?: string;
+          event_id?: string;
+          id?: string;
+          name?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "event_registrations_event_id_fkey";
+            columns: ["event_id"];
+            isOneToOne: false;
+            referencedRelation: "events";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       events: {
         Row: {
           created_at: string;
@@ -79,6 +120,7 @@ export type Database = {
           image_url: string | null;
           is_published: boolean;
           location: string | null;
+          registration_enabled: boolean;
           starts_at: string;
           title: string;
         };
@@ -92,6 +134,7 @@ export type Database = {
           image_url?: string | null;
           is_published?: boolean;
           location?: string | null;
+          registration_enabled?: boolean;
           starts_at: string;
           title: string;
         };
@@ -105,6 +148,7 @@ export type Database = {
           image_url?: string | null;
           is_published?: boolean;
           location?: string | null;
+          registration_enabled?: boolean;
           starts_at?: string;
           title?: string;
         };
