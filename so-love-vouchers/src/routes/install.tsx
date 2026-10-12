@@ -85,7 +85,7 @@ function InstallPage() {
             <BrandHeart className="size-8" />
           </div>
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-primary">
-            {installed ? "All set" : "Step 1 of 2"}
+            {installed ? "All set" : "Welcome"}
           </p>
           <h1 className="text-3xl font-bold tracking-tight">
             {installed ? "Added to your home screen" : "Add So Love to your home screen"}
