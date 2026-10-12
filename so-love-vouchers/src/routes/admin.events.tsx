@@ -19,6 +19,7 @@ import {
   ConfirmDialog,
   InfoNote,
 } from "@/components/admin/form-kit";
+import { DialogFooter } from "@/components/ui/dialog";
 import { ImageUploader } from "@/components/image-uploader";
 import { useRealtimeInvalidate } from "@/hooks/use-realtime";
 import {
@@ -34,6 +35,9 @@ import {
   ClipboardList,
   Users,
   Download,
+  Search,
+  Radio,
+  UserRound,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useServerFn } from "@tanstack/react-start";
@@ -571,10 +575,27 @@ function AdminEventsPage() {
   );
 }
 
-/** Everyone registered for one event, with totals, CSV export and removal. */
+/** "Lerato Mokoena" -> "LM"; one name -> its first letter. */
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "?";
+  return ((parts[0][0] ?? "") + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase();
+}
+
+function registeredAt(iso: string) {
+  return new Date(iso).toLocaleString(undefined, {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+/** Everyone registered for one event, with totals, search, CSV export and removal. */
 function RegistrationsDialog({ event, onClose }: { event: EventRow | null; onClose: () => void }) {
   const qc = useQueryClient();
   const [removing, setRemoving] = useState<EventRegistration | null>(null);
+  const [query, setQuery] = useState("");
   useRealtimeInvalidate("event_registrations", [["admin-event-regs", event?.id]]);
 
   const { data, isLoading } = useQuery({
@@ -585,13 +606,18 @@ function RegistrationsDialog({ event, onClose }: { event: EventRow | null; onClo
         .from("event_registrations")
         .select("*")
         .eq("event_id", event!.id)
-        .order("created_at", { ascending: true });
+        .order("created_at", { ascending: false });
       if (error) throw error;
       return data as EventRegistration[];
     },
   });
 
-  const guests = useMemo(() => (data ?? []).reduce((sum, r) => sum + r.attendees, 0), [data]);
+  const rows = useMemo(() => data ?? [], [data]);
+  const guests = useMemo(() => rows.reduce((sum, r) => sum + r.attendees, 0), [rows]);
+  const q = query.trim().toLowerCase();
+  const visible = q
+    ? rows.filter((r) => r.name.toLowerCase().includes(q) || r.email.toLowerCase().includes(q))
+    : rows;
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
@@ -608,9 +634,9 @@ function RegistrationsDialog({ event, onClose }: { event: EventRow | null; onClo
   });
 
   function exportCsv() {
-    if (!event || !data?.length) return;
+    if (!event || !rows.length) return;
     // BOM so Excel opens accented names correctly.
-    const blob = new Blob(["\uFEFF" + registrationsToCsv(data)], {
+    const blob = new Blob(["\uFEFF" + registrationsToCsv(rows)], {
       type: "text/csv;charset=utf-8",
     });
     const url = URL.createObjectURL(blob);
@@ -625,69 +651,141 @@ function RegistrationsDialog({ event, onClose }: { event: EventRow | null; onClo
     <>
       <AdminModal
         open={!!event}
-        onOpenChange={(o) => !o && onClose()}
+        onOpenChange={(o) => {
+          if (!o) {
+            setQuery("");
+            onClose();
+          }
+        }}
         eyebrow="Registrations"
         icon={Users}
+        size="md"
         title={event?.title ?? ""}
         description={
-          data?.length
-            ? `${data.length} registered · ${attendeesLabel(guests)} attending in total`
-            : "Members who register in the app appear here live."
+          event
+            ? new Date(event.starts_at).toLocaleString(undefined, {
+                weekday: "long",
+                day: "numeric",
+                month: "long",
+                hour: "2-digit",
+                minute: "2-digit",
+              })
+            : undefined
         }
         footer={
-          <div className="flex items-center justify-between gap-2 w-full">
-            <Button variant="ghost" size="sm" onClick={onClose}>
-              Close
+          <DialogFooter className="shrink-0 items-center gap-3 border-t border-border/60 bg-background/85 px-6 py-4 backdrop-blur-xl md:px-8 sm:justify-between max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <p className="hidden items-center gap-1.5 text-[11px] text-muted-foreground sm:flex">
+              <Radio className="size-3.5 text-emerald-600" /> Updates live as members register
+            </p>
+            <Button
+              onClick={exportCsv}
+              disabled={!rows.length}
+              className="h-11 rounded-full px-6 font-semibold shadow-lg shadow-primary/25 transition-shadow hover:shadow-primary/35 max-sm:w-full"
+            >
+              <Download className="size-4 mr-2" /> Export CSV
             </Button>
-            <Button size="sm" onClick={exportCsv} disabled={!data?.length}>
-              <Download className="size-3.5 mr-1.5" /> Export CSV
-            </Button>
-          </div>
+          </DialogFooter>
         }
       >
-        <ModalBody>
+        <div className="flex-1 overflow-y-auto px-6 py-6 md:px-8 space-y-5">
+          {/* Summary */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-2xl bg-muted/50 p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                Registrations
+              </p>
+              <p
+                className="mt-1 text-3xl font-bold tracking-tight tabular-nums"
+                style={{ fontFamily: "var(--font-display)" }}
+              >
+                {isLoading ? "—" : rows.length}
+              </p>
+            </div>
+            <div className="rounded-2xl bg-primary/[0.07] p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">
+                People attending
+              </p>
+              <p
+                className="mt-1 text-3xl font-bold tracking-tight tabular-nums text-primary"
+                style={{ fontFamily: "var(--font-display)" }}
+              >
+                {isLoading ? "—" : guests}
+              </p>
+            </div>
+          </div>
+
+          {rows.length > 5 && (
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search name or email"
+                aria-label="Search registrations"
+                className="h-11 rounded-full pl-10"
+              />
+            </div>
+          )}
+
           {isLoading ? (
             <div className="py-10 grid place-items-center">
               <Loader2 className="size-5 animate-spin text-muted-foreground" />
             </div>
-          ) : !data?.length ? (
-            <div className="py-12 text-center">
-              <Users className="size-8 mx-auto text-muted-foreground/50" />
-              <p className="text-sm font-medium mt-3">No registrations yet</p>
+          ) : !rows.length ? (
+            <div className="rounded-2xl border border-dashed border-border bg-muted/20 px-6 py-12 text-center">
+              <div className="mx-auto mb-3 grid size-12 place-items-center rounded-2xl bg-background shadow-sm ring-1 ring-border">
+                <Users className="size-5 text-muted-foreground" />
+              </div>
+              <p className="text-sm font-semibold">No registrations yet</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Members who register in the app appear here instantly.
+              </p>
             </div>
+          ) : !visible.length ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              No one matches “{query.trim()}”.
+            </p>
           ) : (
-            <ul className="divide-y divide-border rounded-2xl border border-border overflow-hidden">
-              {data.map((r) => (
-                <li key={r.id} className="flex items-center gap-3 px-4 py-3 bg-card">
-                  <span className="grid place-items-center size-9 rounded-full bg-primary/10 text-primary font-bold text-sm shrink-0">
-                    {r.name.trim().charAt(0).toUpperCase() || "?"}
+            <ul className="space-y-2">
+              {visible.map((r) => (
+                <li
+                  key={r.id}
+                  className="group flex items-center gap-3.5 rounded-2xl border border-border/70 bg-card p-3 pr-2 shadow-sm shadow-black/[0.02] transition-colors hover:border-border"
+                >
+                  <span className="grid size-11 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary/15 to-primary/5 text-sm font-bold text-primary ring-1 ring-primary/10">
+                    {initials(r.name)}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold truncate">{r.name}</p>
+                    <p className="truncate text-[15px] font-semibold leading-tight">{r.name}</p>
                     <a
                       href={`mailto:${r.email}`}
-                      className="text-xs text-muted-foreground truncate block hover:text-primary"
+                      className="mt-0.5 block truncate text-[13px] text-muted-foreground hover:text-primary"
                     >
                       {r.email}
                     </a>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground/80">
+                      Registered {registeredAt(r.created_at)}
+                    </p>
                   </div>
-                  <span className="text-xs font-semibold bg-muted rounded-full px-2.5 py-1 shrink-0 tabular-nums">
-                    {attendeesLabel(r.attendees)}
+                  <span className="inline-flex min-w-[3.75rem] shrink-0 items-center justify-center gap-1.5 rounded-full bg-foreground/[0.05] px-3 py-1.5 text-[13px] font-semibold tabular-nums">
+                    <UserRound className="size-3.5 text-muted-foreground" />
+                    {r.attendees}
+                    <span className="sr-only"> {r.attendees === 1 ? "person" : "people"}</span>
                   </span>
                   <Button
                     size="icon"
                     variant="ghost"
-                    className="size-8 rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
+                    className="size-9 shrink-0 rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                     onClick={() => setRemoving(r)}
                     aria-label={`Remove ${r.name}`}
                   >
-                    <Trash2 className="size-3.5" />
+                    <Trash2 className="size-4" />
                   </Button>
                 </li>
               ))}
             </ul>
           )}
-        </ModalBody>
+        </div>
       </AdminModal>
 
       <ConfirmDialog
