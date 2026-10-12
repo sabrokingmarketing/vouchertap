@@ -3,7 +3,6 @@ import { useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useIsAdmin } from "@/hooks/use-is-admin";
 import { useProfile } from "@/hooks/use-profile";
-import { hasAccess } from "@/lib/access-code";
 import { isMemberDisabled } from "@/lib/member-status";
 import { toast } from "sonner";
 import {
@@ -50,10 +49,6 @@ function AppLayout() {
     (profileQuery.data == null || profileQuery.data.onboarding_completed_at === null);
 
   useEffect(() => {
-    if (!hasAccess()) {
-      navigate({ to: "/access-code" });
-      return;
-    }
     if (!loading && !session) {
       navigate({ to: "/login" });
     }

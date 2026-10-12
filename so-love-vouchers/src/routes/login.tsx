@@ -7,7 +7,6 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
-import { hasAccess } from "@/lib/access-code";
 import { isMemberDisabled } from "@/lib/member-status";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
@@ -39,15 +38,11 @@ function LoginPage() {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // Admin can reach /login directly without the member access code
+  // `?admin=1` opens the admin flavour of the sign-in screen.
   const searchParams = new URLSearchParams(
     typeof window !== "undefined" ? window.location.search : "",
   );
   const isAdminLogin = searchParams.get("admin") === "1";
-
-  useEffect(() => {
-    if (!isAdminLogin && !hasAccess()) navigate({ to: "/access-code" });
-  }, [navigate, isAdminLogin]);
 
   useEffect(() => {
     if (loading || !session) return;

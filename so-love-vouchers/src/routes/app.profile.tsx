@@ -30,7 +30,6 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { revokeAccess } from "@/lib/access-code";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/app/profile")({
@@ -247,15 +246,6 @@ function ProfilePage() {
               <LogOut className="size-4 mr-2" />
               Sign out
             </Button>
-            <button
-              onClick={() => {
-                revokeAccess();
-                navigate({ to: "/access-code" });
-              }}
-              className="w-full text-center text-[11px] text-muted-foreground hover:text-foreground py-2"
-            >
-              Reset access code on this device
-            </button>
           </div>
         </div>
       )}

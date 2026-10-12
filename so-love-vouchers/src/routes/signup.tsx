@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,8 +9,7 @@ import { Label } from "@/components/ui/label";
 import { ImageUploader } from "@/components/image-uploader";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
-import { hasAccess } from "@/lib/access-code";
-import { isMissingColumnError } from "@/hooks/use-profile";
+import { isMissingColumnError, type Profile } from "@/hooks/use-profile";
 import { toast } from "sonner";
 import { Loader2, ArrowRight, Building2, Sparkles } from "lucide-react";
 import { BrandHeart } from "@/components/brand-heart";
@@ -22,11 +22,19 @@ const step1Schema = z.object({
   password: z.string().min(6, "Password: at least 6 characters"),
 });
 
+// Step 2 is optional: every field may be left blank, but anything filled in
+// must still be valid.
 const step2Schema = z.object({
-  businessName: z.string().trim().min(1, "Enter your company name"),
-  businessEmail: z.string().trim().email("Enter a valid business email"),
-  workPhone: z.string().trim().min(6, "Enter your business phone number"),
-  website: z.string().trim().optional(),
+  businessName: z.string().trim(),
+  businessEmail: z
+    .string()
+    .trim()
+    .refine((v) => !v || z.string().email().safeParse(v).success, "Enter a valid business email"),
+  workPhone: z
+    .string()
+    .trim()
+    .refine((v) => !v || v.length >= 6, "Enter a valid business phone number"),
+  website: z.string().trim(),
 });
 
 export const Route = createFileRoute("/signup")({
@@ -73,8 +81,12 @@ function FieldBlock({
 
 function SignupPage() {
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const { session, loading, user } = useAuth();
   const [step, setStep] = useState<1 | 2>(1);
+  // The new account's id, taken straight from signUp(). The auth context can
+  // lag a tick behind, and step 2 (including "Skip") must never depend on it.
+  const [newUserId, setNewUserId] = useState<string | null>(null);
   // True once the user begins creating an account here, so the
   // "already signed in → go to app" redirect doesn't yank them out of step 2.
   const [started, setStarted] = useState(false);
@@ -87,16 +99,12 @@ function SignupPage() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
 
-  // Step 2 — business (required)
+  // Step 2 — business (optional)
   const [businessName, setBusinessName] = useState("");
   const [businessEmail, setBusinessEmail] = useState("");
   const [workPhone, setWorkPhone] = useState("");
   const [website, setWebsite] = useState("");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!hasAccess()) navigate({ to: "/access-code" });
-  }, [navigate]);
 
   useEffect(() => {
     if (!loading && session && !started) navigate({ to: "/app/events" });
@@ -148,6 +156,7 @@ function SignupPage() {
       if (profileError && !isMissingColumnError(profileError)) {
         console.error("[signup] profile save failed:", profileError.message);
       }
+      setNewUserId(newUserId);
       setSubmitting(false);
       setStep(2);
       return;
@@ -159,47 +168,64 @@ function SignupPage() {
     navigate({ to: "/login" });
   }
 
-  async function finish(e: React.FormEvent) {
-    e.preventDefault();
-    if (!user?.id) return;
-    const parsed = step2Schema.safeParse({
-      businessName,
-      businessEmail,
-      workPhone,
-      website,
-    });
-    if (!parsed.success) {
-      toast.error(parsed.error.issues[0].message);
+  /** Finish signup. `saveBusiness = false` is "Skip for now". */
+  async function finish(saveBusiness: boolean) {
+    const uid = newUserId ?? user?.id;
+    if (!uid) {
+      toast.error("Your session has expired — please sign in to continue.");
+      navigate({ to: "/login" });
       return;
+    }
+    let business: z.infer<typeof step2Schema> | null = null;
+    if (saveBusiness) {
+      const parsed = step2Schema.safeParse({ businessName, businessEmail, workPhone, website });
+      if (!parsed.success) {
+        toast.error(parsed.error.issues[0].message);
+        return;
+      }
+      business = parsed.data;
     }
     setSubmitting(true);
     const completedAt = new Date().toISOString();
+    // Upsert (not update): if the profile row is somehow missing, an update
+    // would silently match 0 rows and the app gate would bounce the member
+    // back to onboarding.
     const legacy = {
-      business_name: parsed.data.businessName,
-      business_website: parsed.data.website || null,
-      business_logo_url: logoUrl,
+      id: uid,
+      email: email.trim() || null,
       updated_at: completedAt,
+      ...(business && {
+        business_name: business.businessName || null,
+        business_website: business.website || null,
+        business_logo_url: logoUrl,
+      }),
     };
     const full = {
       ...legacy,
-      business_email: parsed.data.businessEmail,
-      work_phone: parsed.data.workPhone,
       onboarding_completed_at: completedAt,
+      ...(business && {
+        business_email: business.businessEmail || null,
+        work_phone: business.workPhone || null,
+      }),
     };
-    const { error } = await supabase.from("profiles").update(full).eq("id", user.id);
+    const { error } = await supabase.from("profiles").upsert(full, { onConflict: "id" });
     if (error) {
-      if (!isMissingColumnError(error)) {
-        setSubmitting(false);
-        toast.error(error.message || "Could not save. Please try again.");
-        return;
-      }
-      const retry = await supabase.from("profiles").update(legacy).eq("id", user.id);
+      const retry = isMissingColumnError(error)
+        ? await supabase.from("profiles").upsert(legacy, { onConflict: "id" })
+        : { error };
       if (retry.error) {
         setSubmitting(false);
         toast.error(retry.error.message || "Could not save. Please try again.");
         return;
       }
     }
+    // Mark onboarding done in the cache before navigating, so the app gate
+    // sees "completed" immediately and never bounces back to the wizard.
+    qc.setQueryData(["profile", uid], (prev: Profile | null | undefined) => ({
+      ...(prev ?? ({ id: uid } as Profile)),
+      onboarding_completed_at: completedAt,
+    }));
+    qc.invalidateQueries({ queryKey: ["profile", uid] });
     setSubmitting(false);
     toast.success("Welcome to So Love Krugersdorp!");
     navigate({ to: "/app/events", replace: true });
@@ -222,7 +248,7 @@ function SignupPage() {
           <p className="text-sm text-muted-foreground mt-2 max-w-xs leading-relaxed">
             {step === 1
               ? "Your details."
-              : "Add your business details to finish creating your account."}
+              : "Optional — add your company so the community can find you."}
           </p>
           <div className="mt-5">
             <StepDots step={step} />
@@ -294,7 +320,13 @@ function SignupPage() {
               </Button>
             </form>
           ) : (
-            <form className="space-y-4" onSubmit={finish}>
+            <form
+              className="space-y-4"
+              onSubmit={(e) => {
+                e.preventDefault();
+                finish(true);
+              }}
+            >
               <div className="flex justify-center pb-1">
                 <ImageUploader
                   value={logoUrl}
@@ -304,7 +336,7 @@ function SignupPage() {
                   label="Company logo"
                 />
               </div>
-              <FieldBlock label="Company name" required>
+              <FieldBlock label="Company name">
                 <Input
                   autoComplete="organization"
                   placeholder="e.g. Bella Vista Cafe"
@@ -312,7 +344,7 @@ function SignupPage() {
                   onChange={(e) => setBusinessName(e.target.value)}
                 />
               </FieldBlock>
-              <FieldBlock label="Business email" required>
+              <FieldBlock label="Business email">
                 <Input
                   type="email"
                   placeholder="hello@company.co.za"
@@ -320,7 +352,7 @@ function SignupPage() {
                   onChange={(e) => setBusinessEmail(e.target.value)}
                 />
               </FieldBlock>
-              <FieldBlock label="Business phone" required>
+              <FieldBlock label="Business phone">
                 <Input
                   type="tel"
                   placeholder="011 000 0000"
@@ -338,7 +370,7 @@ function SignupPage() {
                   onChange={(e) => setWebsite(e.target.value)}
                 />
               </FieldBlock>
-              <div className="pt-1">
+              <div className="space-y-2 pt-1">
                 <Button
                   type="submit"
                   size="lg"
@@ -352,6 +384,15 @@ function SignupPage() {
                       <Sparkles className="size-4 mr-1.5" /> Finish &amp; join
                     </>
                   )}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full text-muted-foreground"
+                  disabled={submitting}
+                  onClick={() => finish(false)}
+                >
+                  Skip for now
                 </Button>
               </div>
             </form>

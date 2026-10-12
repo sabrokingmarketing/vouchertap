@@ -4,7 +4,6 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { useProfile, isMissingColumnError, type Profile } from "@/hooks/use-profile";
-import { hasAccess } from "@/lib/access-code";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -89,16 +88,15 @@ function OnboardingPage() {
       setWorkPhone(profile.work_phone ?? "");
       setWebsite(profile.business_website ?? "");
       setLogoUrl(profile.business_logo_url ?? null);
+      // Name already on file (e.g. captured at signup)? Go straight to the
+      // optional business step instead of asking again.
+      if (profile.first_name?.trim() && profile.last_name?.trim()) setStep(2);
       setSeeded(true);
     }
   }, [profile, seeded]);
 
   // Guards
   useEffect(() => {
-    if (!hasAccess()) {
-      navigate({ to: "/access-code" });
-      return;
-    }
     if (!loading && !session) {
       navigate({ to: "/login" });
     }
@@ -114,7 +112,6 @@ function OnboardingPage() {
     mutationFn: async () => {
       if (!firstName.trim() || !lastName.trim())
         throw new Error("Please enter your name and surname.");
-      if (!slkCode.trim()) throw new Error("Please enter your SLK code.");
       const displayName = profile?.display_name || `${firstName.trim()} ${lastName.trim()}`;
       // Upsert: self-heals the rare case where the signup trigger hasn't
       // created the profile row yet.
@@ -128,7 +125,7 @@ function OnboardingPage() {
       };
       const { error } = await supabase
         .from("profiles")
-        .upsert({ ...base, slk_code: slkCode.trim() }, { onConflict: "id" });
+        .upsert({ ...base, slk_code: slkCode.trim() || null }, { onConflict: "id" });
       if (error) {
         // Live DB missing the onboarding migration — save what we can.
         if (!isMissingColumnError(error)) throw error;
@@ -143,33 +140,37 @@ function OnboardingPage() {
     onError: (e) => toast.error(e.message || "Could not save. Please try again."),
   });
 
+  /** Finish onboarding. `saveBusiness = false` is "Skip for now". */
   const finish = useMutation({
     mutationFn: async (saveBusiness: boolean) => {
       const completedAt = new Date().toISOString();
-      const legacy = saveBusiness
-        ? {
-            business_name: businessName.trim() || null,
-            phone: phone.trim() || null,
-            business_website: website.trim() || null,
-            business_logo_url: logoUrl,
-            updated_at: completedAt,
-          }
-        : { updated_at: completedAt };
-      const full = saveBusiness
-        ? {
-            ...legacy,
-            business_email: businessEmail.trim() || null,
-            work_phone: workPhone.trim() || null,
-            onboarding_completed_at: completedAt,
-          }
-        : { ...legacy, onboarding_completed_at: completedAt };
-      const { error } = await supabase.from("profiles").update(full).eq("id", user!.id);
+      // Upsert (not update): a missing profile row would make an update
+      // silently match 0 rows and bounce the member straight back here.
+      const legacy = {
+        id: user!.id,
+        email: user!.email ?? profile?.email ?? null,
+        updated_at: completedAt,
+        ...(saveBusiness && {
+          business_name: businessName.trim() || null,
+          phone: phone.trim() || null,
+          business_website: website.trim() || null,
+          business_logo_url: logoUrl,
+        }),
+      };
+      const full = {
+        ...legacy,
+        onboarding_completed_at: completedAt,
+        ...(saveBusiness && {
+          business_email: businessEmail.trim() || null,
+          work_phone: workPhone.trim() || null,
+        }),
+      };
+      const { error } = await supabase.from("profiles").upsert(full, { onConflict: "id" });
       if (error) {
         // Live DB missing the onboarding migration — save the legacy fields
-        // and let the user through; the wizard re-appears (prefilled) once
-        // the migration lands, so nothing is lost.
+        // and let the user through.
         if (!isMissingColumnError(error)) throw error;
-        const retry = await supabase.from("profiles").update(legacy).eq("id", user!.id);
+        const retry = await supabase.from("profiles").upsert(legacy, { onConflict: "id" });
         if (retry.error) throw retry.error;
       }
       return completedAt;
@@ -177,9 +178,12 @@ function OnboardingPage() {
     onSuccess: (completedAt) => {
       // Update the cache before navigating so the app gate sees "completed"
       // synchronously and never bounces back here.
-      qc.setQueryData(["profile", user?.id], (prev: Profile | null | undefined) =>
-        prev ? { ...prev, onboarding_completed_at: completedAt } : prev,
-      );
+      // Seed even when the cached profile is missing, so the gate never
+      // bounces the member back here.
+      qc.setQueryData(["profile", user?.id], (prev: Profile | null | undefined) => ({
+        ...(prev ?? ({ id: user!.id } as Profile)),
+        onboarding_completed_at: completedAt,
+      }));
       qc.invalidateQueries({ queryKey: ["profile", user?.id] });
       toast.success("Welcome to So Love Krugersdorp!");
       navigate({ to: "/app/events", replace: true });
@@ -247,7 +251,7 @@ function OnboardingPage() {
                   />
                 </FieldBlock>
               </div>
-              <FieldBlock label="SLK code" required hint="Your So Love Krugersdorp member code.">
+              <FieldBlock label="SLK code" hint="Optional — your member code, if you have one.">
                 <Input
                   className="font-serial uppercase"
                   placeholder="e.g. SLK-1234"
