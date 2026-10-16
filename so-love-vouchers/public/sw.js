@@ -26,8 +26,8 @@ self.addEventListener("push", (event) => {
   const title = payload.title || "So Love Krugersdorp";
   const options = {
     body: payload.body || "",
-    icon: payload.icon || "/icon-512.png",
-    badge: payload.badge || "/icon-512.png",
+    icon: payload.icon || "/icon-192.png",
+    badge: payload.badge || "/icon-192.png",
     image: payload.image || undefined,
     tag: payload.tag || undefined,
     data: { url: payload.url || "/app" },

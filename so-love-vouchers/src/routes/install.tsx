@@ -2,15 +2,27 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { BrandHeart } from "@/components/brand-heart";
-import { BellRing, Check, Compass, MoreVertical, Plus, Share, Zap } from "lucide-react";
+import {
+  BellRing,
+  Check,
+  Compass,
+  ExternalLink,
+  MoreVertical,
+  Plus,
+  Share,
+  ShieldAlert,
+  Zap,
+} from "lucide-react";
 import {
   INSTALLED_EVENT,
   INSTALL_AVAILABLE_EVENT,
   canPromptInstall,
   iosNeedsSafari,
   isIOSDevice,
+  isSamsungInternet,
   isStandalone,
   markInstallPageSeen,
+  openInChromeUrl,
   promptInstall,
 } from "@/lib/pwa-install";
 
@@ -76,6 +88,7 @@ function InstallPage() {
   if (!ready) return null;
 
   const ios = isIOSDevice();
+  const samsung = isSamsungInternet();
 
   return (
     <main className="grid min-h-dvh place-items-center bg-background px-6 py-10">
@@ -121,7 +134,9 @@ function InstallPage() {
             </ul>
 
             <div className="mt-8">
-              {canPrompt ? (
+              {samsung ? (
+                <SamsungSteps />
+              ) : canPrompt ? (
                 <Button size="lg" className="w-full" onClick={handleInstall} disabled={busy}>
                   <Plus className="size-4" />
                   Add to home screen
@@ -171,6 +186,43 @@ function IOSSteps({ needsSafari }: { needsSafari: boolean }) {
           Tap <strong className="font-semibold">Add</strong> in the top corner
         </Step>
       </ol>
+    </div>
+  );
+}
+
+/**
+ * Samsung Internet: its own app installer is blocked by Google Play Protect
+ * on current Android, so install through Chrome — or keep a plain shortcut.
+ */
+function SamsungSteps() {
+  return (
+    <div className="space-y-3">
+      <Button asChild size="lg" className="w-full">
+        <a href={openInChromeUrl()}>
+          <ExternalLink className="size-4" />
+          Open in Chrome to install
+        </a>
+      </Button>
+      <p className="flex gap-2 rounded-xl bg-muted px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
+        <ShieldAlert aria-hidden="true" className="mt-px size-4 shrink-0 text-primary" />
+        On newer Samsung phones, Google Play Protect blocks apps installed from Samsung Internet.
+        Chrome installs So Love safely.
+      </p>
+      <div className="rounded-2xl border border-border bg-card p-5">
+        <p className="mb-3 text-xs font-semibold text-foreground">Or stay in Samsung Internet</p>
+        <ol className="space-y-3 text-sm">
+          <Step n={1}>
+            Tap the menu{" "}
+            <MoreVertical aria-hidden="true" className="mx-0.5 inline size-4 -translate-y-px" /> at
+            the bottom right
+          </Step>
+          <Step n={2}>
+            Choose <strong className="font-semibold">Add page to</strong>, then{" "}
+            <strong className="font-semibold">Home screen</strong>
+          </Step>
+          <Step n={3}>A So Love shortcut lands on your home screen</Step>
+        </ol>
+      </div>
     </div>
   );
 }

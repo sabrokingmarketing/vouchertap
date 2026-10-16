@@ -122,6 +122,28 @@ const PWA_INSTALL_JS = `
 })();
 `;
 
+// Samsung Internet packages a PWA into its own Android APK instead of using
+// Chrome's Google-built WebAPK. On current Android that APK is rejected by
+// Google Play Protect ("Unsafe app blocked — built for an older version of
+// Android"), and nothing a website does can change how Samsung builds it.
+// So on Samsung Internet only, the manifest is switched off before the
+// browser reads it: the broken "Add page to > Apps" installer never appears,
+// while "Add to Home screen" (a plain shortcut) and push notifications keep
+// working. The install page sends those members to Chrome to install.
+// Runs right after <HeadContent />, so the manifest <link> already exists;
+// the observer also catches the link if it is ever re-inserted.
+const SAMSUNG_MANIFEST_GUARD_JS = `
+(function(){
+  if(!/SamsungBrowser/i.test(navigator.userAgent))return;
+  function off(){
+    var links=document.querySelectorAll('link[rel="manifest"]');
+    for(var i=0;i<links.length;i++){links[i].setAttribute('rel','samsung-disabled-manifest');}
+  }
+  off();
+  try{new MutationObserver(off).observe(document.head,{childList:true});}catch(e){}
+})();
+`;
+
 function NotFoundComponent() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -230,8 +252,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "preload", as: "image", href: "/preloader-logo.png" },
       { rel: "stylesheet", href: appCss },
       { rel: "manifest", href: "/manifest.webmanifest" },
-      { rel: "icon", type: "image/png", href: "/icon-512.png" },
-      { rel: "apple-touch-icon", href: "/icon-512.png" },
+      { rel: "icon", type: "image/png", sizes: "192x192", href: "/icon-192.png" },
+      { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon.png" },
       {
         rel: "stylesheet",
         href: "https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600;700;800&family=Inter:wght@400;450;500;600;700&display=swap",
@@ -252,6 +274,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
         <script dangerouslySetInnerHTML={{ __html: PWA_INSTALL_JS }} />
         <style dangerouslySetInnerHTML={{ __html: PRELOADER_CSS }} />
         <HeadContent />
+        <script dangerouslySetInnerHTML={{ __html: SAMSUNG_MANIFEST_GUARD_JS }} />
       </head>
       <body suppressHydrationWarning>
         {/* Static HTML preloader — not React-managed, so hydration cannot reposition it. */}

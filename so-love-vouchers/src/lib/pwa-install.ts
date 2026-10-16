@@ -65,6 +65,29 @@ export function iosNeedsSafari(): boolean {
 }
 
 /**
+ * Samsung Internet builds its own APK for installed web apps, which Google
+ * Play Protect blocks on current Android ("built for an older version of
+ * Android"). Members on it are sent to Chrome to install instead — see the
+ * manifest guard in __root.tsx.
+ */
+export function isSamsungInternet(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return /SamsungBrowser/i.test(navigator.userAgent);
+}
+
+/**
+ * An Android intent link that opens the current page in Chrome. If Chrome
+ * isn't installed, Android falls back to its Play Store page.
+ */
+export function openInChromeUrl(): string {
+  const { host, pathname, search } = window.location;
+  const fallback = encodeURIComponent(
+    "https://play.google.com/store/apps/details?id=com.android.chrome",
+  );
+  return `intent://${host}${pathname}${search}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${fallback};end`;
+}
+
+/**
  * Whether the entry flow has already offered the install page on this device.
  * Visiting /install directly always shows it — this only gates the automatic
  * hand-off, so members aren't nagged on every cold start.
