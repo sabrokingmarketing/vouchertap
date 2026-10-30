@@ -346,7 +346,7 @@ function ClaimDetails({
           </p>
         )}
 
-        <dl className="grid gap-2 border-t border-border pt-4 text-xs">
+        <dl className="grid grid-cols-1 gap-2 border-t border-border pt-4 text-xs">
           <InfoRow label="Claimed" value={formatDayTime(claim.claimed_at)} />
           {status === "redeemed" && claim.redeemed_at ? (
             <InfoRow label="Used" value={formatDayTime(claim.redeemed_at)} />

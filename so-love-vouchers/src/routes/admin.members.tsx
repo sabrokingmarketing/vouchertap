@@ -194,7 +194,7 @@ function AdminMembersPage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex items-end justify-between gap-4">
+      <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-xs uppercase tracking-widest text-primary font-semibold">Admin</p>
           <h1 className="text-3xl font-bold mt-1">Members</h1>

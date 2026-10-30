@@ -134,7 +134,7 @@ function VouchersPage() {
       <PageHeader count={data?.length ?? 0} loading={isLoading} />
 
       {isLoading ? (
-        <ul className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+        <ul className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
           {[0, 1, 2].map((i) => (
             <li key={i}>
               <TicketSkeleton />
@@ -144,7 +144,7 @@ function VouchersPage() {
       ) : !data || data.length === 0 ? (
         <EmptyState />
       ) : (
-        <ul className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+        <ul className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
           {data.map((v, i) => (
             <li
               key={v.id}

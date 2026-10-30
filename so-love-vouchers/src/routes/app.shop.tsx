@@ -339,7 +339,7 @@ function ProductDetail({
   }
 
   return (
-    <div className="grid sm:grid-cols-2 flex-1 overflow-y-auto">
+    <div className="grid grid-cols-1 sm:grid-cols-2 flex-1 overflow-y-auto">
       {/* Gallery */}
       <div className="bg-white border-b sm:border-b-0 sm:border-r border-border/60 p-4 flex flex-col gap-3">
         <div className="relative aspect-square">

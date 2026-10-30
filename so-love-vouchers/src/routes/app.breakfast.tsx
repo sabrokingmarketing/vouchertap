@@ -155,7 +155,7 @@ function BreakfastPage() {
           </Card>
         ) : featured ? (
           <Card className="overflow-hidden rounded-2xl">
-            <div className="grid md:grid-cols-[260px_1fr]">
+            <div className="grid grid-cols-1 md:grid-cols-[260px_1fr]">
               {/* Speaker visual */}
               <div className="relative aspect-[4/3] md:aspect-auto md:min-h-[280px] bg-muted">
                 {featured.meeting?.speaker_image_url ? (

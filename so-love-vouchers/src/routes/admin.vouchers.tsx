@@ -275,7 +275,7 @@ function AdminVouchersPage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex items-end justify-between gap-4">
+      <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-xs uppercase tracking-widest text-primary font-semibold">Admin</p>
           <h1 className="text-3xl font-bold mt-1">Vouchers</h1>
@@ -337,11 +337,11 @@ function AdminVouchersPage() {
           </p>
         </Card>
       ) : (
-        <ul className="grid gap-2.5">
+        <ul className="grid grid-cols-1 gap-2.5">
           {visible.map((v) => (
             <li key={v.id}>
-              <Card className="p-3.5 flex items-center gap-4 rounded-2xl border-border/70 shadow-sm transition-all hover:border-border hover:shadow-md">
-                <div className="size-16 rounded-xl bg-muted overflow-hidden flex-shrink-0 ring-1 ring-border/50">
+              <Card className="p-3.5 flex flex-wrap items-center gap-x-4 gap-y-2.5 sm:flex-nowrap rounded-2xl border-border/70 shadow-sm transition-all hover:border-border hover:shadow-md">
+                <div className="size-14 sm:size-16 rounded-xl bg-muted overflow-hidden flex-shrink-0 ring-1 ring-border/50">
                   {v.image_url ? (
                     <img src={v.image_url} alt="" className="size-full object-cover" />
                   ) : (
@@ -389,7 +389,7 @@ function AdminVouchersPage() {
                     </span>
                   </div>
                 </div>
-                <div className="flex gap-1 shrink-0">
+                <div className="flex w-full shrink-0 justify-end gap-1 border-t border-border/60 pt-2 sm:w-auto sm:border-0 sm:pt-0">
                   <Button
                     variant="outline"
                     size="sm"

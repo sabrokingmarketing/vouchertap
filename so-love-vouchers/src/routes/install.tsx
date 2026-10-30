@@ -91,7 +91,7 @@ function InstallPage() {
   const samsung = isSamsungInternet();
 
   return (
-    <main className="grid min-h-dvh place-items-center bg-background px-6 py-10">
+    <main className="grid min-h-dvh place-items-center bg-background px-6 pt-[max(2.5rem,calc(env(safe-area-inset-top)+1rem))] pb-[max(2.5rem,calc(env(safe-area-inset-bottom)+1rem))]">
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center text-center">
           <div className="mb-6 grid size-16 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20">

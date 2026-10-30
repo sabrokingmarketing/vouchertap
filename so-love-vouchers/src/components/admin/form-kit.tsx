@@ -69,7 +69,7 @@ export function AdminModal({
         className={cn(
           "flex max-h-[92dvh] w-full flex-col gap-0 overflow-hidden border-0 p-0 shadow-2xl shadow-black/25",
           // Phone: full-width sheet anchored to the bottom edge.
-          "max-sm:top-auto max-sm:bottom-0 max-sm:max-h-[94dvh] max-sm:max-w-none max-sm:translate-y-0 max-sm:rounded-b-none max-sm:rounded-t-[1.75rem]",
+          "max-sm:top-auto max-sm:bottom-0 max-sm:max-h-[calc(100dvh-env(safe-area-inset-top)-0.75rem)] max-sm:max-w-none max-sm:translate-y-0 max-sm:rounded-b-none max-sm:rounded-t-[1.75rem]",
           "rounded-[1.75rem]",
           SIZES[size],
         )}

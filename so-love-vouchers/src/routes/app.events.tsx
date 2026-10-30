@@ -260,7 +260,7 @@ function EventsPage() {
           <Loader2 className="size-5 animate-spin text-muted-foreground" />
         </div>
       ) : (
-        <ul className="grid gap-6 md:gap-8 md:grid-cols-2 xl:grid-cols-3">
+        <ul className="grid grid-cols-1 gap-6 md:gap-8 md:grid-cols-2 xl:grid-cols-3">
           {pinned.map((event, i) => renderEvent(event, i))}
           <li
             className="animate-rise"

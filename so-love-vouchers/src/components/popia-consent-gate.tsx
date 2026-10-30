@@ -71,7 +71,7 @@ export function PopiaConsentGate() {
         onEscapeKeyDown={(e) => e.preventDefault()}
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
-        className="max-h-[90dvh] w-[calc(100%-2rem)] max-w-md gap-0 overflow-y-auto overscroll-contain rounded-3xl p-0"
+        className="max-h-[calc(100dvh-2*max(env(safe-area-inset-top),env(safe-area-inset-bottom))-1.5rem)] w-[calc(100%-2rem)] max-w-md gap-0 overflow-y-auto overscroll-contain rounded-3xl p-0"
       >
         <DialogHeader className="items-center px-5 pb-2 pt-6 text-center sm:px-6 sm:pt-7 sm:text-center">
           <span className="mb-3 grid size-12 place-items-center rounded-2xl bg-primary/10 text-primary sm:mb-4 sm:size-14">

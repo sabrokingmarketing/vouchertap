@@ -88,7 +88,7 @@ function LoginPage() {
   }
 
   return (
-    <main className="min-h-dvh flex flex-col items-center justify-center bg-background px-6 py-10">
+    <main className="min-h-dvh flex flex-col items-center justify-center bg-background px-6 pt-[max(2.5rem,calc(env(safe-area-inset-top)+1rem))] pb-[max(2.5rem,calc(env(safe-area-inset-bottom)+1rem))]">
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center text-center mb-8">
           <div className="size-14 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center mb-4">
