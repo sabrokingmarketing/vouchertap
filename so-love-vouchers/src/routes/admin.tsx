@@ -2,6 +2,7 @@ import { createFileRoute, Outlet, Link, useNavigate, useLocation } from "@tansta
 import { useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useIsAdmin } from "@/hooks/use-is-admin";
+import { PopiaConsentGate } from "@/components/popia-consent-gate";
 import type { LucideIcon } from "lucide-react";
 import {
   LayoutDashboard,
@@ -129,6 +130,7 @@ function AdminLayout() {
 
       <main className="flex-1 p-5 md:p-8 max-w-5xl w-full mx-auto">
         <Outlet />
+        <PopiaConsentGate />
       </main>
     </div>
   );

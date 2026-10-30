@@ -17,6 +17,8 @@ export type Profile = {
   business_website: string | null;
   business_logo_url: string | null;
   onboarding_completed_at: string | null;
+  /** When the member accepted the POPIA notice; null = not yet. */
+  popia_accepted_at: string | null;
   created_at: string | null;
 };
 

@@ -6,12 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ImageUploader } from "@/components/image-uploader";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth-context";
 import { isMissingColumnError, type Profile } from "@/hooks/use-profile";
 import { toast } from "sonner";
-import { Loader2, ArrowRight, Building2, Sparkles } from "lucide-react";
+import { Loader2, ArrowRight, Building2, ShieldCheck, Sparkles } from "lucide-react";
 import { BrandHeart } from "@/components/brand-heart";
 
 const step1Schema = z.object({
@@ -98,6 +99,7 @@ function SignupPage() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [popiaAccepted, setPopiaAccepted] = useState(false);
 
   // Step 2 — business (optional)
   const [businessName, setBusinessName] = useState("");
@@ -121,6 +123,10 @@ function SignupPage() {
     });
     if (!parsed.success) {
       toast.error(parsed.error.issues[0].message);
+      return;
+    }
+    if (!popiaAccepted) {
+      toast.error("Please accept the POPIA notice to continue");
       return;
     }
     setStarted(true);
@@ -148,6 +154,10 @@ function SignupPage() {
         last_name: parsed.data.lastName,
         phone: parsed.data.phone,
         display_name: `${parsed.data.firstName} ${parsed.data.lastName}`,
+        // Consent given on this form, so the in-app POPIA notice isn't shown again.
+        // (Only possible when signup returns a session; members who confirm their
+        // email first are asked once more in the app, since nothing could be saved yet.)
+        popia_accepted_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
       const { error: profileError } = await supabase
@@ -304,6 +314,25 @@ function SignupPage() {
                   onChange={(e) => setPassword(e.target.value)}
                 />
               </FieldBlock>
+              <label
+                htmlFor="signup-popia"
+                className="flex cursor-pointer items-start gap-3 rounded-xl border border-border p-3.5 transition-colors has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-primary/[0.04]"
+              >
+                <Checkbox
+                  id="signup-popia"
+                  checked={popiaAccepted}
+                  onCheckedChange={(v) => setPopiaAccepted(v === true)}
+                  className="mt-0.5"
+                />
+                <span className="text-[13px] leading-relaxed text-muted-foreground">
+                  <span className="mb-0.5 flex items-center gap-1.5 font-semibold text-foreground">
+                    <ShieldCheck aria-hidden="true" className="size-3.5 text-primary" />
+                    POPIA Act
+                  </span>
+                  I understand that all my private information is protected under the POPIA Act, and
+                  I agree to So Love Krugersdorp keeping it to run my membership.
+                </span>
+              </label>
               <Button
                 type="submit"
                 size="lg"

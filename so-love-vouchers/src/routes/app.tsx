@@ -2,6 +2,7 @@ import { createFileRoute, Outlet, Link, useNavigate, useLocation } from "@tansta
 import { useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useIsAdmin } from "@/hooks/use-is-admin";
+import { PopiaConsentGate } from "@/components/popia-consent-gate";
 import { useProfile } from "@/hooks/use-profile";
 import { isMemberDisabled } from "@/lib/member-status";
 import { toast } from "sonner";
@@ -152,6 +153,7 @@ function AppLayout() {
           desktop too. See --app-nav-space in styles.css. */}
       <main className="flex-1 mx-auto w-full max-w-xl md:max-w-6xl px-5 md:px-10 pt-[var(--app-top-space)] md:pt-10 pb-[var(--app-nav-space)] md:pb-12">
         <Outlet />
+        <PopiaConsentGate />
       </main>
 
       {/* Installed as a PWA the status bar is translucent, so content scrolls up

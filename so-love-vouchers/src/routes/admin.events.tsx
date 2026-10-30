@@ -35,6 +35,8 @@ import {
   ClipboardList,
   Users,
   Download,
+  Pin,
+  PinOff,
   Search,
   Radio,
   UserRound,
@@ -66,6 +68,7 @@ type EventRow = {
   form_url: string | null;
   video_url: string | null;
   registration_enabled: boolean;
+  is_pinned: boolean;
   is_published: boolean;
 };
 
@@ -89,6 +92,7 @@ const empty: EditState = {
   form_url: "",
   video_url: "",
   is_published: true,
+  is_pinned: false,
   starts_date: "",
   starts_time: "",
   ends_date: "",
@@ -200,6 +204,7 @@ function AdminEventsPage() {
         registration_enabled: e.reg_mode === "form",
         video_url: normaliseLink(e.video_url, "video"),
         is_published: e.is_published ?? true,
+        is_pinned: e.is_pinned ?? false,
       };
       const isNew = !e.id;
       if (e.id) {
@@ -247,6 +252,29 @@ function AdminEventsPage() {
     onError: (e) => toast.error(e.message || "Failed to save"),
   });
 
+  // One-tap pin / unpin from the list.
+  const togglePin = useMutation({
+    mutationFn: async (ev: EventRow) => {
+      const { error } = await supabase
+        .from("events")
+        .update({ is_pinned: !ev.is_pinned })
+        .eq("id", ev.id);
+      if (error) throw error;
+      return !ev.is_pinned;
+    },
+    onSuccess: (pinned) => {
+      toast.success(pinned ? "Pinned to the top of the Events page" : "Unpinned");
+      qc.invalidateQueries({ queryKey: ["admin-events"] });
+    },
+    onError: (e) => toast.error(e.message || "Could not update the pin"),
+  });
+
+  // Pinned events first (matching the member Events page), then by date.
+  const sorted = useMemo(
+    () => [...(data ?? [])].sort((a, b) => Number(b.is_pinned) - Number(a.is_pinned)),
+    [data],
+  );
+
   const del = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("events").delete().eq("id", id);
@@ -288,7 +316,7 @@ function AdminEventsPage() {
         </Card>
       ) : (
         <ul className="grid gap-2.5">
-          {data.map((ev) => (
+          {sorted.map((ev) => (
             <li key={ev.id}>
               <Card className="group p-3.5 flex items-center gap-4 rounded-2xl border-border/70 shadow-sm transition-all hover:border-border hover:shadow-md">
                 <div className="size-16 rounded-xl bg-muted overflow-hidden flex-shrink-0 ring-1 ring-border/50">
@@ -303,6 +331,11 @@ function AdminEventsPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="font-bold truncate">{ev.title}</h3>
+                    {ev.is_pinned && (
+                      <Badge className="text-[10px] rounded-full gap-1 bg-primary text-primary-foreground hover:bg-primary border-0">
+                        <Pin className="size-3" /> Pinned
+                      </Badge>
+                    )}
                     {!ev.is_published && (
                       <Badge variant="secondary" className="text-[10px] rounded-full">
                         Hidden
@@ -345,6 +378,23 @@ function AdminEventsPage() {
                   )}
                 </div>
                 <div className="flex gap-1 shrink-0">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className={cn(
+                      "rounded-full",
+                      ev.is_pinned
+                        ? "text-primary bg-primary/10 hover:bg-primary/15 hover:text-primary"
+                        : "text-muted-foreground",
+                    )}
+                    aria-label={`Pin ${ev.title} to top`}
+                    aria-pressed={ev.is_pinned}
+                    title={ev.is_pinned ? "Unpin" : "Pin to top"}
+                    disabled={togglePin.isPending && togglePin.variables?.id === ev.id}
+                    onClick={() => togglePin.mutate(ev)}
+                  >
+                    {ev.is_pinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
+                  </Button>
                   <Button
                     size="icon"
                     variant="ghost"
@@ -543,6 +593,16 @@ function AdminEventsPage() {
                   id="published"
                   checked={edit.is_published ?? true}
                   onCheckedChange={(v) => setEdit({ ...edit, is_published: v })}
+                />
+              </ToggleRow>
+              <ToggleRow
+                label="Pin to top"
+                description="Shows first on the members' Events page with a Pinned badge."
+              >
+                <Switch
+                  id="pinned"
+                  checked={edit.is_pinned ?? false}
+                  onCheckedChange={(v) => setEdit({ ...edit, is_pinned: v })}
                 />
               </ToggleRow>
               <InfoNote icon={Bell}>

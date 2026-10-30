@@ -118,6 +118,7 @@ export type Database = {
           video_url: string | null;
           id: string;
           image_url: string | null;
+          is_pinned: boolean;
           is_published: boolean;
           location: string | null;
           registration_enabled: boolean;
@@ -132,6 +133,7 @@ export type Database = {
           video_url?: string | null;
           id?: string;
           image_url?: string | null;
+          is_pinned?: boolean;
           is_published?: boolean;
           location?: string | null;
           registration_enabled?: boolean;
@@ -146,6 +148,7 @@ export type Database = {
           video_url?: string | null;
           id?: string;
           image_url?: string | null;
+          is_pinned?: boolean;
           is_published?: boolean;
           location?: string | null;
           registration_enabled?: boolean;
@@ -169,6 +172,7 @@ export type Database = {
           id: string;
           last_name: string | null;
           onboarding_completed_at: string | null;
+          popia_accepted_at: string | null;
           phone: string | null;
           slk_code: string | null;
           updated_at: string;
@@ -188,6 +192,7 @@ export type Database = {
           id: string;
           last_name?: string | null;
           onboarding_completed_at?: string | null;
+          popia_accepted_at?: string | null;
           phone?: string | null;
           slk_code?: string | null;
           updated_at?: string;
@@ -207,6 +212,7 @@ export type Database = {
           id?: string;
           last_name?: string | null;
           onboarding_completed_at?: string | null;
+          popia_accepted_at?: string | null;
           phone?: string | null;
           slk_code?: string | null;
           updated_at?: string;
